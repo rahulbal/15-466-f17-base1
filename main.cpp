@@ -7,6 +7,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <fstream>
 
 static GLuint compile_shader(GLenum type, std::string const &source);
 static GLuint link_program(GLuint vertex_shader, GLuint fragment_shader);
@@ -82,11 +83,11 @@ int main(int argc, char **argv) {
 
 	//texture:
 	GLuint tex = 0;
-	glm::uvec2 tex_size = glm::uvec2(0,0);
+	glm::uvec2 tex_size = glm::uvec2(0, 0);
 
 	{ //load texture 'tex':
 		std::vector< uint32_t > data;
-		if (!load_png("elements.png", &tex_size.x, &tex_size.y, &data, LowerLeftOrigin)) {
+		if (!load_png("assets.png", &tex_size.x, &tex_size.y, &data, LowerLeftOrigin)) {
 			std::cerr << "Failed to load texture." << std::endl;
 			exit(1);
 		}
@@ -185,19 +186,112 @@ int main(int argc, char **argv) {
 
 	//------------ sprite info ------------
 	struct SpriteInfo {
-		glm::vec2 min_uv;
-		glm::vec2 max_uv;
-		glm::vec2 rad;
+		int object_id;
+		glm::vec2 origin = glm::vec2(0.0, 0.0);
+		glm::vec2 min_uv = glm::vec2(0.0, 0.0);
+		glm::vec2 max_uv = glm::vec2(0.0, 0.0);
 	};
 
 
-	//------------ game state ------------
+	//----------- game objects -----------
+	//The idea I think is to make a vector of objects
+	//make a grid of positions on the map
+	//A occupancy value will tell if the tile can be traversed
+	struct Object {
+		glm::vec2 pos;
+		std::vector<SpriteInfo>::iterator sprite;
+	};
 
-	glm::vec2 mouse = glm::vec2(0.0f, 0.0f); //mouse position in [-1,1]x[-1,1] coordinates
+	struct Tile {
+		glm::vec2 pos;
+		bool occupied; //traversal value
+		Object* sprite; //Texture
+		Object* object; //the object that is occupying this tile
+	};
+
+
+	Tile tiles[100][100]; //background tiles
+	
+	//------- SpriteInfo loader ----------
+	struct Header {
+		int text_size_x;
+		int text_size_y;
+		int num_textures;
+	};
+
+	Header header;
+
+	std::vector<SpriteInfo> sprites;
+
+	std::ifstream asset_locations;
+
+	asset_locations.open("textures.blob", std::ios::in | std::ios::binary);
+	asset_locations.read(reinterpret_cast<char *> (&header), sizeof(header));
+	if (!asset_locations.good()) {
+		throw std::runtime_error("Unable to open textures");
+	}
+
+	sprites.resize(header.num_textures);
+	if (!asset_locations.read(reinterpret_cast< char * >(&sprites[0]), sprites.size() * sizeof(SpriteInfo))) {
+		throw std::runtime_error("Failed to read chunk data.");
+	}
+
+	//---------- objects -----------------
+	Object player_down;
+	Object player_right;
+	Object player_left;
+	Object player_up;
+	Object floor;
+	Object wall;
+	Object wire_vert;
+	Object wire_hori;
+	Object wire_up_right;
+	Object wire_up_left;
+	Object wire_down_right;
+	Object wire_down_left;
+	Object sweeper;
+
+	for (auto it = sprites.begin(); it < sprites.end(); it++) {
+		switch(it->object_id) {
+		case 1: 
+			player_down.sprite = it;
+			break;
+		case 2:
+			player_right.sprite = it;
+			break;
+		case 3:
+			player_left.sprite = it;
+			break;
+		case 4:
+			player_up.sprite = it;
+			break;
+		case 11:
+			floor.sprite = it;
+			break;
+		case 12:
+			wall.sprite = it;
+			break;
+		}
+	}
+
+	for (int i = 0; i < 100; i++) {
+		for (int j = 0; j < 100; j++) {
+			tiles[i][j].sprite = &floor;
+			tiles[i][j].pos = glm::vec2(i,j);
+		}
+	}
+
+	Tile player;
+	player.sprite = &player_down;
+
+	player.pos = glm::vec2(5.0f, 5.0f);
+	
+
+	//------------ game state ------------
 
 	struct {
 		glm::vec2 at = glm::vec2(0.0f, 0.0f);
-		glm::vec2 radius = glm::vec2(10.0f, 10.0f);
+		glm::vec2 radius = glm::vec2(15.0f, 15.0f);
 	} camera;
 	//correct radius for aspect ratio:
 	camera.radius.x = camera.radius.y * (float(config.size.x) / float(config.size.y));
@@ -209,12 +303,32 @@ int main(int argc, char **argv) {
 		static SDL_Event evt;
 		while (SDL_PollEvent(&evt) == 1) {
 			//handle input:
-			if (evt.type == SDL_MOUSEMOTION) {
-				mouse.x = (evt.motion.x + 0.5f) / float(config.size.x) * 2.0f - 1.0f;
-				mouse.y = (evt.motion.y + 0.5f) / float(config.size.y) *-2.0f + 1.0f;
-			} else if (evt.type == SDL_MOUSEBUTTONDOWN) {
-			} else if (evt.type == SDL_KEYDOWN && evt.key.keysym.sym == SDLK_ESCAPE) {
-				should_quit = true;
+			if (evt.type == SDL_KEYDOWN) {
+				switch(evt.key.keysym.sym) {
+				case SDLK_ESCAPE:
+					should_quit = true;
+					break;
+				case SDLK_UP:
+					camera.at.y += 1;
+					player.pos.y += 1;
+					player.sprite = &player_up;
+					break;
+				case SDLK_RIGHT:
+					camera.at.x += 1;
+					player.pos.x += 1;
+					player.sprite = &player_right;
+					break;
+				case SDLK_LEFT:
+					camera.at.x -= 1;
+					player.pos.x -= 1;
+					player.sprite = &player_left;
+					break;
+				case SDLK_DOWN:
+					camera.at.y -= 1;
+					player.pos.y -= 1;
+					player.sprite = &player_down;
+					break;
+				}
 			} else if (evt.type == SDL_QUIT) {
 				should_quit = true;
 				break;
@@ -241,37 +355,53 @@ int main(int argc, char **argv) {
 		{ //draw game state:
 			std::vector< Vertex > verts;
 
-			//helper: add rectangle to verts:
-			auto rect = [&verts](glm::vec2 const &at, glm::vec2 const &rad, glm::u8vec4 const &tint) {
-				verts.emplace_back(at + glm::vec2(-rad.x,-rad.y), glm::vec2(0.0f, 0.0f), tint);
-				verts.emplace_back(verts.back());
-				verts.emplace_back(at + glm::vec2(-rad.x, rad.y), glm::vec2(0.0f, 1.0f), tint);
-				verts.emplace_back(at + glm::vec2( rad.x,-rad.y), glm::vec2(1.0f, 0.0f), tint);
-				verts.emplace_back(at + glm::vec2( rad.x, rad.y), glm::vec2(1.0f, 1.0f), tint);
-				verts.emplace_back(verts.back());
-			};
-
-			auto draw_sprite = [&verts](SpriteInfo const &sprite, glm::vec2 const &at) {
-				glm::vec2 min_uv = sprite.min_uv;
-				glm::vec2 max_uv = sprite.max_uv;
-				glm::vec2 rad = sprite.rad;
+			auto draw_sprite = [&verts, &header](SpriteInfo const &sprite, glm::vec2 const &at) {
+				glm::vec2 min_uv;
+				min_uv.x = sprite.min_uv.x / header.text_size_x;
+				min_uv.y = 1.0f - sprite.min_uv.y / header.text_size_y;
+				//TODO: max_uv needs to be filled in
+				glm::vec2 max_uv;
+				max_uv.x = sprite.max_uv.x / header.text_size_x;
+				max_uv.y = 1.0f - sprite.max_uv.y / header.text_size_y;
+				std::cerr << "max" << max_uv.x << " " << max_uv.y << std::endl;
+				std::cerr << "min" << min_uv.x << " " << min_uv.y << std::endl;
+				//glm::vec2 max_uv = glm::vec2(1.0, 1.0);
+				//TODO: change how the rad is still 0, 0
+				//glm::vec2 rad = sprite.rad;
+				glm::vec2 top;
+				glm::vec2 bottom;
+				bottom.x = at.x - (sprite.origin.x - sprite.min_uv.x) / 8;
+				bottom.y = at.y - (sprite.max_uv.y - sprite.origin.y) / 8;
+				top.x = at.x + (sprite.max_uv.x - sprite.origin.x) / 8;
+				top.y = at.y + (sprite.origin.y - sprite.min_uv.y) / 8;
+				
 				glm::u8vec4 tint = glm::u8vec4(0xff, 0xff, 0xff, 0xff);
-
-				verts.emplace_back(at + glm::vec2(-rad.x,-rad.y), glm::vec2(min_uv.x, min_uv.y), tint);
+				std::cerr << top.x << " " << top.y << std::endl;
+				std::cerr << bottom.x << " " <<  bottom.y << std::endl;
+				verts.emplace_back(glm::vec2(bottom.x,bottom.y), glm::vec2(min_uv.x, max_uv.y), tint);
 				verts.emplace_back(verts.back());
-				verts.emplace_back(at + glm::vec2(-rad.x, rad.y), glm::vec2(min_uv.x, max_uv.y), tint);
-				verts.emplace_back(at + glm::vec2( rad.x,-rad.y), glm::vec2(max_uv.x, min_uv.y), tint);
-				verts.emplace_back(at + glm::vec2( rad.x, rad.y), glm::vec2(max_uv.x, max_uv.y), tint);
+				verts.emplace_back(glm::vec2(bottom.x, top.y), glm::vec2(min_uv.x, min_uv.y), tint);
+				verts.emplace_back(glm::vec2(top.x,bottom.y), glm::vec2(max_uv.x, max_uv.y), tint);
+				verts.emplace_back(glm::vec2(top.x, top.y), glm::vec2(max_uv.x, min_uv.y), tint);
 				verts.emplace_back(verts.back());
 			};
 
 
 			//Draw a sprite "player" at position (5.0, 2.0):
-			static SpriteInfo player = load_sprite("player"); //TODO: hoist
-			draw_sprite(player, glm::vec2(5.0, 2.0));
-
-			rect(glm::vec2(0.0f, 0.0f), glm::vec2(4.0f), glm::u8vec4(0xff, 0x00, 0x00, 0xff));
-			rect(mouse * camera.radius + camera.at, glm::vec2(4.0f), glm::u8vec4(0xff, 0xff, 0xff, 0x88));
+			//stddatic SpriteInfo player; //TODO: hoist
+			//draw_sprite(player, glm::vec2(0.5, 0.5));
+			
+			for (int i = 0; i < 100; i++) {
+				for (int j = 0; j < 100; j++) {
+					draw_sprite(*tiles[i][j].sprite->sprite, glm::vec2(i, j));
+				}
+			}
+			
+			//draw_sprite(*tiles[0][0].sprite->sprite, glm::vec2(0, 0));
+			draw_sprite(*player.sprite->sprite, player.pos);
+			
+			//rect(glm::vec2(0.0f, 0.0f), glm::vec2(1.0f), glm::u8vec4(0xff, 0x00, 0x00, 0xff));
+			//rect(mouse * camera.radius + camera.at, glm::vec2(1.0f, 1.0f), glm::u8vec4(0xff, 0xff, 0xff, 0x88));
 
 
 			glBindBuffer(GL_ARRAY_BUFFER, buffer);
