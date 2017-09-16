@@ -290,7 +290,7 @@ int main(int argc, char **argv) {
 	//------------ game state ------------
 
 	struct {
-		glm::vec2 at = glm::vec2(0.0f, 0.0f);
+		glm::vec2 at = glm::vec2(5.0f, 5.0f);
 		glm::vec2 radius = glm::vec2(15.0f, 15.0f);
 	} camera;
 	//correct radius for aspect ratio:
@@ -363,8 +363,6 @@ int main(int argc, char **argv) {
 				glm::vec2 max_uv;
 				max_uv.x = sprite.max_uv.x / header.text_size_x;
 				max_uv.y = 1.0f - sprite.max_uv.y / header.text_size_y;
-				std::cerr << "max" << max_uv.x << " " << max_uv.y << std::endl;
-				std::cerr << "min" << min_uv.x << " " << min_uv.y << std::endl;
 				//glm::vec2 max_uv = glm::vec2(1.0, 1.0);
 				//TODO: change how the rad is still 0, 0
 				//glm::vec2 rad = sprite.rad;
@@ -376,8 +374,6 @@ int main(int argc, char **argv) {
 				top.y = at.y + (sprite.origin.y - sprite.min_uv.y) / 8;
 				
 				glm::u8vec4 tint = glm::u8vec4(0xff, 0xff, 0xff, 0xff);
-				std::cerr << top.x << " " << top.y << std::endl;
-				std::cerr << bottom.x << " " <<  bottom.y << std::endl;
 				verts.emplace_back(glm::vec2(bottom.x,bottom.y), glm::vec2(min_uv.x, max_uv.y), tint);
 				verts.emplace_back(verts.back());
 				verts.emplace_back(glm::vec2(bottom.x, top.y), glm::vec2(min_uv.x, min_uv.y), tint);
