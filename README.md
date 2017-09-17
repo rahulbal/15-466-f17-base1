@@ -1,29 +1,47 @@
 NOTE: please fill in the first section with information about your game.
 
-# *Game Title*
+# Vaccum Cleaner Overlord
 
-*Game Title* is *Your Name*'s implementation of [*Design Document*](http://graphics.cs.cmu.edu/courses/15-466-f17/game1-designs/put-real-link-here) for game1 in 15-466-f17.
+*Vaccum Cleaner Overlord* is *Rahul Balakrishnan*'s implementation of [*Design Document*](http://graphics.cs.cmu.edu/courses/15-466-f17/game1-designs/rbalakr1/) for game1 in 15-466-f17.
 
-*Include a Screenshot Here*
+![loadscreen](game_start.png)
+
+![dialogs](game_chat)
 
 ## Build Notes
 
-*Include any special notes or steps required to build your game here. If there are no special notes, delete this section.*
+Always try to execute the python script [script](extract_png.py)
 
 ## Asset Pipeline
 
-*Briefly describe the asset pipeline for this game. What sorts of source files are used? How are they processed? How are they loaded?*
+The png file assets.png must be used in conjugation with the textures.blob that can be generated using the script [script](extract_png.py).
+
+A feature that should be implemented in the future writing a program that automatically extracts the assets.
+Additionally it will be good to write a asset map and a small software to help create maps for the game.
 
 ## Architecture
 
-*Provide a brief introduction to how you implemented the design. Talk about the basic structure of your code.*
+The code works by importing all asset. Then organizing the data into a set of iterators and associated game objects.
+A grid based collision detection system is also implemented.
+
+Controls are accepted from the keyboard.
+Up Arrow 	: move up
+Down Arrow 	: move down
+Left Arrow	: move left
+Right Arrow	: move right
+
+If you are in close proximity to an interactable hitting the 'A' key will launch dialogs.
+The dialog can be dismissed by pressing any key other than 'A'.
+
+The text was mapped by indexing in linear increments from the texture coordinate of 'a'.
+
+The text used is a modified 'The Axeman Commeth' by Jim McCann.
 
 ## Reflection
 
-*Reflect on the assignment. What was difficult? What worked well? If you were doing it again, what would you change?*
+Implementing wire movements and collisions consumed too much time. Slipping away from the allotted time.
 
-*Reflect on the design document. What was clear and what was ambiguous? How did you resolve the ambiguities?*
-
+Design document was extremely ambitious, it had a lot of requirement that needed to be simplified for the scope of this assignment.
 
 # About Base1
 
