@@ -6,7 +6,7 @@ NOTE: please fill in the first section with information about your game.
 
 ![loadscreen](game_start.png)
 
-![dialogs](game_chat)
+![dialogs](game_chat.png)
 
 ## Build Notes
 
