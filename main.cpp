@@ -12,6 +12,9 @@
 static GLuint compile_shader(GLenum type, std::string const &source);
 static GLuint link_program(GLuint vertex_shader, GLuint fragment_shader);
 
+static const int MAX_STEPS = 200;
+static std::string hi_message = "o hi play with me";
+
 int main(int argc, char **argv) {
 	//Configuration:
 	struct {
@@ -198,12 +201,13 @@ int main(int argc, char **argv) {
 	//make a grid of positions on the map
 	//A occupancy value will tell if the tile can be traversed
 	struct Object {
-		glm::vec2 pos;
+		glm::u8vec2 pos;
 		std::vector<SpriteInfo>::iterator sprite;
 	};
 
 	struct Tile {
-		glm::vec2 pos;
+		int dir;
+		glm::u8vec2 pos;
 		bool occupied; //traversal value
 		Object* sprite; //Texture
 		Object* object; //the object that is occupying this tile
@@ -250,6 +254,15 @@ int main(int argc, char **argv) {
 	Object wire_down_right;
 	Object wire_down_left;
 	Object sweeper;
+	Object wire_right_up;
+	Object wire_left_up;
+	Object wire_right_down;
+	Object wire_left_down;
+	Object wall_dark;
+	Object alphabets;
+	Object numbers;
+	Object step_display;
+	Object text_display;
 
 	for (auto it = sprites.begin(); it < sprites.end(); it++) {
 		switch(it->object_id) {
@@ -265,27 +278,151 @@ int main(int argc, char **argv) {
 		case 4:
 			player_up.sprite = it;
 			break;
+		case 5:
+			wire_vert.sprite = it;
+			break;
+		case 6:
+			wire_hori.sprite  = it;
+			break;
+		case 7:
+			wire_up_right.sprite  = it;
+			break;
+		case 8:
+			wire_up_left.sprite  = it;
+			break;
+		case 9:
+			wire_down_right.sprite  = it;
+			break;
+		case 10:
+			wire_down_left.sprite  = it;
+			break;
 		case 11:
 			floor.sprite = it;
 			break;
 		case 12:
 			wall.sprite = it;
 			break;
+		case 13:
+			sweeper.sprite = it;
+			break;
+		case 14:
+			wire_right_up.sprite = it;
+			break;
+		case 15:
+			wire_left_up.sprite = it;
+			break;
+		case 16:
+			wire_right_down.sprite = it;
+			break;
+		case 17:
+			wire_left_down.sprite = it;
+			break;
+		case 18:
+			wall_dark.sprite = it;
+			break;
+		case 19:
+			step_display.sprite = it;
+			break;
+		case 20:
+			text_display.sprite = it;
+			break;
+		case 21:
+			alphabets.sprite = it;
+			break;
+		case 22:
+			numbers.sprite = it;
+			break;
 		}
 	}
 
 	for (int i = 0; i < 100; i++) {
 		for (int j = 0; j < 100; j++) {
-			tiles[i][j].sprite = &floor;
 			tiles[i][j].pos = glm::vec2(i,j);
+			if (i > 24 && i < 77 && j > 24 && j < 75) {
+				tiles[i][j].occupied = true;
+			} else {
+				tiles[i][j].occupied = false;
+			}
+			if (i > 25 && i < 75 && j > 25 && j < 40) {
+				tiles[i][j].sprite = &wall;
+			} else if (i > 25 && i < 75 && j >= 40 && j < 75) {
+				tiles[i][j].sprite = &wall_dark;
+			} else {
+				tiles[i][j].sprite = &floor;
+			}
+			tiles[i][j].object = nullptr;
 		}
 	}
 
+	enum Dir { UP = 1, DOWN = -1, RIGHT = 2, LEFT = -2 };
+
+	struct Wire : public Object{
+		Wire* prev_wire;
+		Dir dir;
+	};
+
 	Tile player;
-	player.sprite = &player_down;
+	player.sprite = &player_up;
 
 	player.pos = glm::vec2(5.0f, 5.0f);
-	
+	Dir player_dir = Dir::UP;
+
+	Tile step_cnt_display;
+	step_cnt_display.sprite = &step_display;
+
+	sweeper.pos = glm::u8vec2(90,95);
+	for (int i = 0; i < 12; i++) {
+		for (int j = 0; j < 10; j++) {
+			tiles[sweeper.pos.x - 5 + i][sweeper.pos.y - 4 + j].occupied = true;
+			tiles[sweeper.pos.x - 5 + i][sweeper.pos.y - 4 + j].object = &sweeper;
+		}
+	}
+	Wire *wires = nullptr;
+
+	//initial wire layer
+	auto add_wire = [&wires, &tiles, &wire_vert,
+			 &wire_hori, &wire_up_right, &wire_up_left,
+			 &wire_down_right, &wire_down_left
+			] (const glm::u8vec2 &pos, Dir type) {
+		Wire* wire = new Wire();
+		wire->pos = pos;
+		wire->prev_wire = wires;
+		switch(type) {
+		case Dir::UP:
+		case Dir::DOWN:
+			wire->sprite = wire_vert.sprite;
+			break;
+		case Dir::LEFT:
+		case Dir::RIGHT:
+			wire->sprite = wire_hori.sprite;
+			break;
+		}
+		wire->dir = type;
+		wires = wire;
+		tiles[pos.x][pos.y].occupied = true;
+		tiles[pos.x][pos.y].object = wire;
+		//std::cerr << "a" << wires << std::endl;
+	};
+
+	auto delete_wire = [&wires, &tiles](){
+		Wire* wire = wires;
+		tiles[wires->pos.x][wires->pos.y].occupied = false;
+		tiles[wires->pos.x][wires->pos.y].object = nullptr;
+		wires = wires->prev_wire;
+		//std::cerr << "d" << wire << std::endl;
+		delete wire;
+		//std::cerr << "t" << wires << std::endl;
+	};
+
+	bool chat = false;
+
+	add_wire(glm::u8vec2(5, 0), Dir::UP);
+	add_wire(glm::u8vec2(5, 1), Dir::UP);
+	add_wire(glm::u8vec2(5, 2), Dir::UP);
+	add_wire(glm::u8vec2(5, 3), Dir::UP);
+	add_wire(glm::u8vec2(5, 4), Dir::UP);
+	add_wire(glm::u8vec2(5, 5), Dir::UP);
+	int step_count = 5;
 
 	//------------ game state ------------
 
@@ -304,29 +441,172 @@ int main(int argc, char **argv) {
 		while (SDL_PollEvent(&evt) == 1) {
 			//handle input:
 			if (evt.type == SDL_KEYDOWN) {
+				chat = false;
 				switch(evt.key.keysym.sym) {
 				case SDLK_ESCAPE:
 					should_quit = true;
 					break;
 				case SDLK_UP:
-					camera.at.y += 1;
-					player.pos.y += 1;
 					player.sprite = &player_up;
+					player_dir = Dir::UP;
+					if (player.pos.y < 98) {
+						if (tiles[player.pos.x][player.pos.y + 1].occupied == true)
+							if (tiles[player.pos.x][player.pos.y + 1].object != wires->prev_wire) {
+								//no more movement
+								break;
+							}
+						player.pos.y += 1;
+						if (player_dir == -wires->dir) {
+							// opposite direction
+							if (step_count == 0) break;
+							delete_wire();
+							step_count--;
+							break;
+						}
+
+						if (step_count > MAX_STEPS) {
+							player.pos.y -= 1;
+							break;
+						}
+
+						if (player_dir == wires->dir) {
+							//No adjustments needed
+							wires->sprite = wire_vert.sprite;
+							add_wire(player.pos, player_dir);
+							step_count++;
+						} else if (wires->dir == Dir::LEFT) {
+							wires->sprite = wire_left_up.sprite;
+							add_wire(player.pos, player_dir);
+							step_count++;
+						} else if (wires->dir == Dir::RIGHT) {
+							wires->sprite = wire_right_up.sprite;
+							add_wire(player.pos, player_dir);
+							step_count++;
+						}
+					}
 					break;
 				case SDLK_RIGHT:
-					camera.at.x += 1;
-					player.pos.x += 1;
 					player.sprite = &player_right;
+					player_dir = Dir::RIGHT;
+					if (player.pos.x < 97) {
+						if (tiles[player.pos.x + 1][player.pos.y].occupied == true)
+							if (tiles[player.pos.x + 1][player.pos.y].object != wires->prev_wire) {
+								break;
+							}
+						player.pos.x += 1;
+						if (player_dir == -wires->dir) {
+							// opposite direction
+							if (step_count == 0) break;
+							delete_wire();
+							step_count--;
+							break;
+						}
+
+						if (step_count > MAX_STEPS) {
+							player.pos.x -= 1;
+							break;
+						}
+						if (player_dir == wires->dir) {
+							//No adjustments needed
+							wires->sprite = wire_hori.sprite;
+							add_wire(player.pos, player_dir);
+							step_count++;
+						} else if (wires->dir == Dir::UP) {
+							wires->sprite = wire_up_right.sprite;
+							add_wire(player.pos, player_dir);
+							step_count++;
+						} else if (wires->dir == Dir::DOWN) {
+							wires->sprite = wire_down_right.sprite;
+							add_wire(player.pos, player_dir);
+							step_count++;
+						}
+					}
 					break;
 				case SDLK_LEFT:
-					camera.at.x -= 1;
-					player.pos.x -= 1;
 					player.sprite = &player_left;
+					player_dir = Dir::LEFT;
+					if (player.pos.x > 2) {
+						if (tiles[player.pos.x - 1][player.pos.y].occupied == true)
+							if (tiles[player.pos.x - 1][player.pos.y].object != wires->prev_wire) {
+								break;
+							}
+						player.pos.x -= 1;
+						if (player_dir == -wires->dir) {
+							// opposite direction
+							if (step_count == 0) break;
+							delete_wire();
+							step_count--;
+							break;
+						}
+
+						if (step_count > MAX_STEPS) {
+							player.pos.x += 1;
+							break;
+						}
+						if (player_dir == wires->dir) {
+							//No adjustments needed
+							wires->sprite = wire_hori.sprite;
+							add_wire(player.pos, player_dir);
+							step_count++;
+						} else if (wires->dir == Dir::UP) {
+							wires->sprite = wire_up_left.sprite;
+							add_wire(player.pos, player_dir);
+							step_count++;
+						} else if (wires->dir == Dir::DOWN) {
+							wires->sprite = wire_down_left.sprite;
+							add_wire(player.pos, player_dir);
+							step_count++;
+						}
+					}
 					break;
 				case SDLK_DOWN:
-					camera.at.y -= 1;
-					player.pos.y -= 1;
 					player.sprite = &player_down;
+					player_dir = Dir::DOWN;
+					if (player.pos.y > 1) {
+						if (tiles[player.pos.x][player.pos.y - 1].occupied == true)
+							if (tiles[player.pos.x][player.pos.y - 1].object != wires->prev_wire) {
+								break;
+							}
+						player.pos.y -= 1;
+						if (player_dir == -wires->dir) {
+							// opposite direction
+							if (step_count == 0) break;
+							delete_wire();
+							step_count--;
+							break;
+						}
+
+						if (step_count > MAX_STEPS) {
+							player.pos.y += 1;
+							break;
+						}
+						if (player_dir == wires->dir) {
+							//No adjustments needed
+							wires->sprite = wire_vert.sprite;
+							add_wire(player.pos, player_dir);
+							step_count++;
+						} else if (wires->dir == Dir::LEFT) {
+							wires->sprite = wire_left_down.sprite;
+							add_wire(player.pos, player_dir);
+							step_count++;
+						} else if (wires->dir == Dir::RIGHT) {
+							wires->sprite = wire_right_down.sprite;
+							add_wire(player.pos, player_dir);
+							step_count++;
+						}
+					}
+					break;
+				case SDLK_a:
+					for (int i = 0; i < 6; i++) {
+						for (int j = 0; j < 4; j++) {
+							if (tiles[player.pos.x - 2 + i][player.pos.y - 1 + j].occupied) {
+								if (tiles[player.pos.x - 2 + i][player.pos.y - 1 + j].object == &sweeper) {
+									chat = true;
+								}
+							}
+						}
+					}
+					
 					break;
 				}
 			} else if (evt.type == SDL_QUIT) {
@@ -336,6 +616,8 @@ int main(int argc, char **argv) {
 		}
 		if (should_quit) break;
 
+		camera.at = player.pos;
+		step_cnt_display.pos = player.pos + glm::u8vec2(10, 10);
 		auto current_time = std::chrono::high_resolution_clock::now();
 		static auto previous_time = current_time;
 		float elapsed = std::chrono::duration< float >(current_time - previous_time).count();
@@ -373,6 +655,8 @@ int main(int argc, char **argv) {
 				top.x = at.x + (sprite.max_uv.x - sprite.origin.x) / 8;
 				top.y = at.y + (sprite.origin.y - sprite.min_uv.y) / 8;
 				
+				//std::cerr << top.x << top.y << std::endl;
+				//std::cerr << bottom.x << bottom.y << std::endl;
 				glm::u8vec4 tint = glm::u8vec4(0xff, 0xff, 0xff, 0xff);
 				verts.emplace_back(glm::vec2(bottom.x,bottom.y), glm::vec2(min_uv.x, max_uv.y), tint);
 				verts.emplace_back(verts.back());
@@ -382,6 +666,8 @@ int main(int argc, char **argv) {
 				verts.emplace_back(verts.back());
 			};
 
+			std::string str;
+			str = std::to_string(step_count);
 
 			//Draw a sprite "player" at position (5.0, 2.0):
 			//stddatic SpriteInfo player; //TODO: hoist
@@ -393,9 +679,42 @@ int main(int argc, char **argv) {
 				}
 			}
 			
+			Wire* wire = wires;
+			while (wire != nullptr) {
+				draw_sprite(*wire->sprite, wire->pos);
+				wire = wire->prev_wire;
+			}
 			//draw_sprite(*tiles[0][0].sprite->sprite, glm::vec2(0, 0));
+			draw_sprite(*sweeper.sprite, sweeper.pos);
 			draw_sprite(*player.sprite->sprite, player.pos);
+			draw_sprite(*step_cnt_display.sprite->sprite, step_cnt_display.pos);
 			
+			SpriteInfo num_sp;
+			int num_val;
+			int i = 0;
+			for (char& c : str) {
+				num_val = c - '0';
+				num_sp.max_uv = numbers.sprite->min_uv + glm::vec2(8 * num_val, 0);
+				num_sp.min_uv = numbers.sprite->min_uv + glm::vec2(8 * num_val + 8, 8);
+				num_sp.origin = numbers.sprite->origin + glm::vec2(8 * num_val, 0);
+				draw_sprite(num_sp, step_cnt_display.pos - glm::u8vec2(3 - i, 0));
+				i++;
+			}
+
+			if (chat) {
+				draw_sprite(*text_display.sprite, camera.at);
+				int i = 0;
+				for (char& c : hi_message) {
+					num_val = c - 'a';
+					num_sp.max_uv = alphabets.sprite->min_uv + glm::vec2(8 * num_val, 0);
+					num_sp.min_uv = alphabets.sprite->min_uv + glm::vec2(8 * num_val + 8, 8);
+					num_sp.origin = alphabets.sprite->origin + glm::vec2(8 * num_val, 0);
+					draw_sprite(num_sp, camera.at - glm::vec2(13 - i, -1));
+					i++;
+				}
+					
+			}
+
 			//rect(glm::vec2(0.0f, 0.0f), glm::vec2(1.0f), glm::u8vec4(0xff, 0x00, 0x00, 0xff));
 			//rect(mouse * camera.radius + camera.at, glm::vec2(1.0f, 1.0f), glm::u8vec4(0xff, 0xff, 0xff, 0x88));
 
